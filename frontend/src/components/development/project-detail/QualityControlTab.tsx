@@ -50,7 +50,7 @@ export const QualityControlTab = ({ projectId, projectInfo, isBuyer = false }: Q
   const fetchQCRecords = async (targetId?: number) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/workflow/qc/project-list?project_id=${projectId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/workflow/qc/project-list?project_id=${projectId}`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
@@ -75,7 +75,7 @@ export const QualityControlTab = ({ projectId, projectInfo, isBuyer = false }: Q
   const fetchCoAData = async (qcId: number) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/workflow/qc/coa/report?qc_id=${qcId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/workflow/qc/coa/report?qc_id=${qcId}`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
@@ -93,7 +93,7 @@ export const QualityControlTab = ({ projectId, projectInfo, isBuyer = false }: Q
     if (!selectedRecord) return;
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/workflow/qc/coa/issue-report?qc_id=${selectedRecord.qc_id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/workflow/qc/coa/issue-report?qc_id=${selectedRecord.qc_id}`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -107,7 +107,7 @@ export const QualityControlTab = ({ projectId, projectInfo, isBuyer = false }: Q
   const createQCReport = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/workflow/qc/`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/workflow/qc/`, {
         method: "POST",
         headers: { 
           "Authorization": `Bearer ${token}`,
@@ -133,7 +133,7 @@ export const QualityControlTab = ({ projectId, projectInfo, isBuyer = false }: Q
     if (isBuyer) return;
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/workflow/qc/items/result?qc_item_id=${itemId}&actual_value=${value}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/workflow/qc/items/result?qc_item_id=${itemId}&actual_value=${value}`, {
         method: "PATCH",
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -149,7 +149,7 @@ export const QualityControlTab = ({ projectId, projectInfo, isBuyer = false }: Q
       const token = localStorage.getItem("token");
       // 우선 프로젝트 ID를 제품 ID로 간주하여 초기화 시도 (실제 운영 시엔 프로젝트와 연결된 제품 ID 필요)
       // 현재는 테스트를 위해 임시로 product_id=1 등을 사용하거나 백엔드 로직 보강 가능
-      const res = await fetch(`http://localhost:8000/api/v1/workflow/qc/items/initialize?qc_id=${selectedRecord.qc_id}&product_id=1`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/workflow/qc/items/initialize?qc_id=${selectedRecord.qc_id}&product_id=1`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -177,7 +177,7 @@ export const QualityControlTab = ({ projectId, projectInfo, isBuyer = false }: Q
         return { qc_item_id: item.qc_item_id, actual_value: val };
       });
 
-      const res = await fetch(`http://localhost:8000/api/v1/workflow/qc/items/batch-results?qc_id=${selectedRecord.qc_id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/workflow/qc/items/batch-results?qc_id=${selectedRecord.qc_id}`, {
         method: "PATCH",
         headers: { 
           "Authorization": `Bearer ${token}`,

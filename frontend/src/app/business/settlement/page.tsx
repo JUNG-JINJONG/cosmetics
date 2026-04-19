@@ -129,7 +129,7 @@ export default function SettlementPage() {
       // Simulate Payment Gateway Delay
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      const res = await fetch(`http://localhost:8000/api/v1/business/settlements/update?settlement_id=${selectedSettlement.settlement_id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/business/settlements/update?settlement_id=${selectedSettlement.settlement_id}`, {
         method: "PATCH",
         headers: { 
           "Content-Type": "application/json",

@@ -86,7 +86,7 @@ export default function AIConsultingChatPage() {
   async function fetchMessages(sessionId: number) {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/ai-rd/consulting/sessions/${sessionId}/messages`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/ai-rd/consulting/sessions/${sessionId}/messages`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
@@ -105,7 +105,7 @@ export default function AIConsultingChatPage() {
   async function fetchReport(sessionId: number) {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/ai-rd/consulting/sessions/${sessionId}/report`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/ai-rd/consulting/sessions/${sessionId}/report`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {
@@ -126,7 +126,7 @@ export default function AIConsultingChatPage() {
     setIsGeneratingReport(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/ai-rd/consulting/sessions/${currentSessionId}/generate-report`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/ai-rd/consulting/sessions/${currentSessionId}/generate-report`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` }
       });

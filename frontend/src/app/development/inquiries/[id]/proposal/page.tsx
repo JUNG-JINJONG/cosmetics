@@ -48,7 +48,7 @@ export default function ProposalEntryPage() {
       if (!dbId) return;
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch(`http://localhost:8000/api/v1/workflow/inquiries/detail?inquiry_id=${parseInt(dbId)}`, {
+        const res = await fetch(`${API_BASE_URL}/api/v1/workflow/inquiries/detail?inquiry_id=${parseInt(dbId)}`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) {
@@ -76,7 +76,7 @@ export default function ProposalEntryPage() {
     try {
       const token = localStorage.getItem("token");
       
-      const res = await fetch(`http://localhost:8000/api/v1/workflow/projects/proposal?project_id=${inquiry.project.project_id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/workflow/projects/proposal?project_id=${inquiry.project.project_id}`, {
         method: "POST",
         headers: { 
           "Authorization": `Bearer ${token}`,

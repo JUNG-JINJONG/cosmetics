@@ -32,7 +32,7 @@ export const SamplingTab = ({
     if (!confirm("샘플을 실제로 수령하셨습니까? 수령 처리 후 품평 작성이 가능합니다.")) return;
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/workflow/samples/update?sample_id=${sampleId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/workflow/samples/update?sample_id=${sampleId}`, {
         method: "PATCH",
         headers: { 
           "Authorization": `Bearer ${token}`,
@@ -105,7 +105,7 @@ export const SamplingTab = ({
 
               try {
                 const token = localStorage.getItem("token");
-                const res = await fetch(`http://localhost:8000/api/v1/workflow/samples`, {
+                const res = await fetch(`${API_BASE_URL}/api/v1/workflow/samples`, {
                   method: "POST",
                   headers: { 
                     "Authorization": `Bearer ${token}`,
@@ -292,7 +292,7 @@ export const SamplingTab = ({
 
                         try {
                           const token = localStorage.getItem("token");
-                          const res = await fetch(`http://localhost:8000/api/v1/workflow/samples/reviews/create?sample_id=${sample.project_sample_id}`, {
+                          const res = await fetch(`${API_BASE_URL}/api/v1/workflow/samples/reviews/create?sample_id=${sample.project_sample_id}`, {
                             method: "POST",
                             headers: { 
                                "Authorization": `Bearer ${token}`,

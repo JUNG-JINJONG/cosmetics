@@ -38,13 +38,13 @@ export const OutboundTab = ({ projectId, isBuyer }: OutboundTabProps) => {
       const token = localStorage.getItem("token");
 
       // 1. 출하 승인 이력 조회
-      const aRes = await fetch(`http://localhost:8000/api/v1/workflow/qc/outbound?project_id=${projectId}`, {
+      const aRes = await fetch(`${API_BASE_URL}/api/v1/workflow/qc/outbound?project_id=${projectId}`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (aRes.ok) setApprovals(await aRes.json());
 
       // 2. QC 기록 조회 (성적서 발행 여부 확인용)
-      const qRes = await fetch(`http://localhost:8000/api/v1/workflow/qc/project-list?project_id=${projectId}`, {
+      const qRes = await fetch(`${API_BASE_URL}/api/v1/workflow/qc/project-list?project_id=${projectId}`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (qRes.ok) setQcRecords(await qRes.json());
@@ -59,7 +59,7 @@ export const OutboundTab = ({ projectId, isBuyer }: OutboundTabProps) => {
   const handleRequestOutbound = async (qcId: number) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/workflow/qc/outbound`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/workflow/qc/outbound`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -86,7 +86,7 @@ export const OutboundTab = ({ projectId, isBuyer }: OutboundTabProps) => {
   const handleApproveOutbound = async (approvalId: number) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/workflow/qc/outbound-update?approval_id=${approvalId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/workflow/qc/outbound-update?approval_id=${approvalId}`, {
         method: "PATCH",
         headers: {
           "Authorization": `Bearer ${token}`,

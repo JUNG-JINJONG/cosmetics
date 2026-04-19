@@ -65,14 +65,14 @@ export default function InquiryDetailPage() {
         if (uRes.ok) setCurrentUser(await uRes.json());
 
         // 2. Inquiry & Quotation
-        const res = await fetch(`http://localhost:8000/api/v1/workflow/inquiries/detail?inquiry_id=${parseInt(dbId)}`, {
+        const res = await fetch(`${API_BASE_URL}/api/v1/workflow/inquiries/detail?inquiry_id=${parseInt(dbId)}`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) {
           const data = await res.json();
           setInquiry(data);
           
-          const qRes = await fetch(`http://localhost:8000/api/v1/business/quotations/?inquiry_id=${parseInt(dbId)}`, {
+          const qRes = await fetch(`${API_BASE_URL}/api/v1/business/quotations/?inquiry_id=${parseInt(dbId)}`, {
             headers: { "Authorization": `Bearer ${token}` }
           });
           if (qRes.ok) {
@@ -82,7 +82,7 @@ export default function InquiryDetailPage() {
 
           // 3. Samples
           if (data.project?.project_id) {
-            const sRes = await fetch(`http://localhost:8000/api/v1/workflow/samples/project-list?project_id=${data.project.project_id}`, {
+            const sRes = await fetch(`${API_BASE_URL}/api/v1/workflow/samples/project-list?project_id=${data.project.project_id}`, {
               headers: { "Authorization": `Bearer ${token}` }
             });
             if (sRes.ok) setSamples(await sRes.json());
@@ -207,6 +207,7 @@ export default function InquiryDetailPage() {
               <TabsContent value="qc">
                 <QualityControlTab 
                   projectId={inquiry.project.project_id}
+                  projectInfo={inquiry.project}
                   isBuyer={isBuyer}
                 />
               </TabsContent>

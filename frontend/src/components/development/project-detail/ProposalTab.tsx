@@ -21,7 +21,7 @@ export const ProposalTab = ({ quotation, inquiry, isBuyer, isPendingApproval }: 
     if (!confirm("제조사의 제안을 최종 승인하시겠습니까?")) return;
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/workflow/projects/confirm?project_id=${inquiry.project.project_id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/workflow/projects/confirm?project_id=${inquiry.project.project_id}`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` }
       });

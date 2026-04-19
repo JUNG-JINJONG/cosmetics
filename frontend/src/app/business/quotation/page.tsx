@@ -112,7 +112,7 @@ export default function QuotationPage() {
 
     try {
       setApproving(true);
-      const res = await fetch(`http://localhost:8000/api/v1/business/orders/convert-from-quotation?quotation_id=${selectedQuote.quotation_id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/business/orders/convert-from-quotation?quotation_id=${selectedQuote.quotation_id}`, {
         method: "POST"
       });
       if (res.ok) {
@@ -159,7 +159,7 @@ export default function QuotationPage() {
     setSheetLoading(true);
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/business/quotations/detail?quotation_id=${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/business/quotations/detail?quotation_id=${id}`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) {

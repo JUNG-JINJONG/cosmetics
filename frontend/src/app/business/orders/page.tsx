@@ -133,7 +133,7 @@ export default function OrdersPage() {
     try {
       setUpdating(true);
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/business/orders/${selectedOrder.order_id}/status`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/business/orders/${selectedOrder.order_id}/status`, {
         method: "PATCH",
         headers: { 
           "Content-Type": "application/json",

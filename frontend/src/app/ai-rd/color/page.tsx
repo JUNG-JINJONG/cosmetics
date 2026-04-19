@@ -76,7 +76,7 @@ export default function DigitalColorLabPage() {
   async function fetchHistory(colorId: number) {
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/ai-rd-color/measurements/history/${colorId}`);
+      const res = await fetch(`${API_BASE_URL}/api/v1/ai-rd-color/measurements/history/${colorId}`);
       if (res.ok) {
         const data = await res.json();
         setHistory(data);

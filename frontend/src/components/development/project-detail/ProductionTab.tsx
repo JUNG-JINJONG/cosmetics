@@ -33,7 +33,7 @@ export const ProductionTab = ({ projectId, isBuyer }: ProductionTabProps) => {
   const fetchProgress = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/workflow/progress/detail?project_id=${projectId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/workflow/progress/detail?project_id=${projectId}`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (res.ok) setProgress(await res.json());
@@ -48,7 +48,7 @@ export const ProductionTab = ({ projectId, isBuyer }: ProductionTabProps) => {
     if (isBuyer) return;
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:8000/api/v1/workflow/progress/update?progress_id=${progress.progress_id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/v1/workflow/progress/update?progress_id=${progress.progress_id}`, {
         method: "PATCH",
         headers: { 
           "Authorization": `Bearer ${token}`,

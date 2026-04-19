@@ -66,7 +66,7 @@ export default function NewQuotationPage() {
       setAssetLoading(true);
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch(`http://localhost:8000/api/v1/business/products/?q=${encodeURIComponent(searchAsset)}&limit=50`, {
+        const res = await fetch(`${API_BASE_URL}/api/v1/business/products/?q=${encodeURIComponent(searchAsset)}&limit=50`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
         if (res.ok) {
@@ -124,7 +124,7 @@ export default function NewQuotationPage() {
       if (qid) {
         const token = localStorage.getItem("token");
         try {
-          const res = await fetch(`http://localhost:8000/api/v1/business/quotations/detail?quotation_id=${qid}`, {
+          const res = await fetch(`${API_BASE_URL}/api/v1/business/quotations/detail?quotation_id=${qid}`, {
             headers: { "Authorization": `Bearer ${token}` }
           });
           if (res.ok) {
@@ -233,7 +233,7 @@ export default function NewQuotationPage() {
       // Handle Edit Mode vs Create Mode
       if (editMode.isEdit && editMode.id) {
         // 1. Update Base Quotation
-        const patchRes = await fetch(`http://localhost:8000/api/v1/business/quotations/update?quotation_id=${editMode.id}`, {
+        const patchRes = await fetch(`${API_BASE_URL}/api/v1/business/quotations/update?quotation_id=${editMode.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
           body: JSON.stringify({
@@ -251,7 +251,7 @@ export default function NewQuotationPage() {
 
         // 2. Delete removed items
         for (const rId of deletedItemIds) {
-          await fetch(`http://localhost:8000/api/v1/business/quotations/items/delete?item_id=${rId}`, {
+          await fetch(`${API_BASE_URL}/api/v1/business/quotations/items/delete?item_id=${rId}`, {
             method: "DELETE",
             headers: { "Authorization": `Bearer ${token}` }
           });
@@ -271,13 +271,13 @@ export default function NewQuotationPage() {
           };
 
           if (item.quotation_item_id) {
-            await fetch(`http://localhost:8000/api/v1/business/quotations/items/update?item_id=${item.quotation_item_id}`, {
+            await fetch(`${API_BASE_URL}/api/v1/business/quotations/items/update?item_id=${item.quotation_item_id}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
               body: JSON.stringify(itemPayload)
             });
           } else {
-            await fetch(`http://localhost:8000/api/v1/business/quotations/items/add?quotation_id=${editMode.id}`, {
+            await fetch(`${API_BASE_URL}/api/v1/business/quotations/items/add?quotation_id=${editMode.id}`, {
               method: "POST",
               headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
               body: JSON.stringify(itemPayload)

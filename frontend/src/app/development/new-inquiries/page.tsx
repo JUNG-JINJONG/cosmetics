@@ -342,7 +342,7 @@ export default function NewInquiriesPage() {
                 
                 const token = localStorage.getItem("token");
                 try {
-                  const res = await fetch(`http://localhost:8000/api/v1/workflow/inquiries/accept?inquiry_id=${applyingItem.realId}`, {
+                  const res = await fetch(`${API_BASE_URL}/api/v1/workflow/inquiries/accept?inquiry_id=${applyingItem.realId}`, {
                     method: "POST",
                     headers: { 
                       "Authorization": `Bearer ${token}` 

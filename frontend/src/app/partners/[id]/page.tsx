@@ -62,7 +62,7 @@ export default function PartnerDetailPage() {
   useEffect(() => {
     async function fetchDetail() {
       try {
-        const res = await fetch(`http://localhost:8000/api/v1/business/partners/${id}`);
+        const res = await fetch(`${API_BASE_URL}/api/v1/business/partners/${id}`);
         if (res.ok) {
           const data = await res.json();
           setCompany(data);

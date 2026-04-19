@@ -1,11 +1,11 @@
 "use client";
+import { API_BASE_URL } from "@/lib/api-config";
 
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Beaker, Sparkles, CheckCircle2, FileText } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api-config";
 
 interface ProposalTabProps {
   quotation: any;

@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from "@/lib/api-config";
 
 import React, { useState, useEffect } from "react";
 import { 
@@ -20,7 +21,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { API_BASE_URL } from "@/lib/api-config";
 
 interface ColorMaster {
   color_id: number;

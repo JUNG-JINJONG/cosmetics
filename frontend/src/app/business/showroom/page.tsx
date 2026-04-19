@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from "@/lib/api-config";
 
 import React, { useState, useEffect } from "react";
 import {
@@ -28,7 +29,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { API_BASE_URL } from "@/lib/api-config";
 
 export default function ShowroomPage() {
   const [catalogProducts, setCatalogProducts] = useState<any[]>([]);

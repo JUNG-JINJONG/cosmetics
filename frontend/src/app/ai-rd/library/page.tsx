@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from "@/lib/api-config";
 
 import React, { useState, useEffect } from "react";
 import { 
@@ -21,7 +22,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { API_BASE_URL } from "@/lib/api-config";
 
 // 15가지 감성 데이터 속성 정의
 const SENSORY_ATTRIBUTES = [

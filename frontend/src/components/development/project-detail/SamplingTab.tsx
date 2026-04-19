@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from "@/lib/api-config";
 
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -6,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Package, Send, Star, AlertCircle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { API_BASE_URL } from "@/lib/api-config";
 
 interface SamplingTabProps {
   samples: any[];

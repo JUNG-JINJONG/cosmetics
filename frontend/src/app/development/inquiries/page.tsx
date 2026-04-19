@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from "@/lib/api-config";
 
 import React, { useState } from "react";
 import {
@@ -50,7 +51,6 @@ import {
 import { useRouter } from "next/navigation";
 import { InquiryWizard } from "@/components/workflow/InquiryWizard";
 import { cn } from "@/lib/utils";
-import { API_BASE_URL } from "@/lib/api-config";
 
 // Mock Data
 const mockInquiries = [

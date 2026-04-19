@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from "@/lib/api-config";
 
 import { 
   ArrowRight, 
@@ -10,7 +11,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL } from "@/lib/api-config";
 
 export default function Home() {
   const router = useRouter();

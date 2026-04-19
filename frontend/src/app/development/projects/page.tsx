@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from "@/lib/api-config";
 
 import React, { useState, useEffect } from "react";
 import {
@@ -38,7 +39,6 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL } from "@/lib/api-config";
 
 const statusStyles: Record<string, string> = {
   "1300000011": "bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800", // 제조사 수락

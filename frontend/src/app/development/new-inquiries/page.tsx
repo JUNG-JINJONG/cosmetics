@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from "@/lib/api-config";
 
 import React, { useState, useEffect } from "react";
 import {
@@ -37,7 +38,6 @@ import { useRouter } from "next/navigation";
 import { AIConsultingReport } from "@/components/inquiry/AIConsultingReport";
 
 import {
-import { API_BASE_URL } from "@/lib/api-config";
   Dialog,
   DialogContent,
   DialogDescription,

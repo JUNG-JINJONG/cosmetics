@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from "@/lib/api-config";
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -30,7 +31,6 @@ import { ProductionTab } from "@/components/development/project-detail/Productio
 import { QualityControlTab } from "@/components/development/project-detail/QualityControlTab";
 import { OutboundTab } from "@/components/development/project-detail/OutboundTab";
 import { ProjectSidebar } from "@/components/development/project-detail/ProjectSidebar";
-import { API_BASE_URL } from "@/lib/api-config";
 
 export default function InquiryDetailPage() {
   const { id } = useParams();

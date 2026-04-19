@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from "@/lib/api-config";
 
 import React, { useEffect, useState } from "react";
 import { 
@@ -18,7 +19,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { API_BASE_URL } from "@/lib/api-config";
 
 interface Company {
   company_id: number;

@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from "@/lib/api-config";
 
 import React, { useState, useEffect, useRef } from "react";
 import { 
@@ -27,7 +28,6 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
-import { API_BASE_URL } from "@/lib/api-config";
 
 interface Message {
   id: number;

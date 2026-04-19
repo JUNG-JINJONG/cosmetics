@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from "@/lib/api-config";
 
 import React, { useState, useEffect, useRef } from "react";
 import { 
@@ -29,7 +30,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { API_BASE_URL } from "@/lib/api-config";
 
 interface Message {
   message_id: number;

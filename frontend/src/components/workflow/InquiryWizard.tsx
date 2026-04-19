@@ -1,4 +1,5 @@
 "use client";
+import { API_BASE_URL } from "@/lib/api-config";
 
 import React, { useState } from "react";
 import {
@@ -22,7 +23,6 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Beaker, ChevronLeft, ChevronRight, CheckCircle2, Factory } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { API_BASE_URL } from "@/lib/api-config";
 
 interface InquiryWizardProps {
   open: boolean;

@@ -1,0 +1,3 @@
+FAILED STMT:
+COMMENT ON COLUMN quotations.status IS '견적진행상태'
+

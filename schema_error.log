@@ -1,0 +1,1049 @@
+(psycopg2.errors.UndefinedTable) relation "production_schedules" does not exist
+
+[SQL: -- Cosmetics-B2B 통합 데이터베이스 스키마
+-- 기반: PostgreSQL
+
+-- 0. 국가 정보 (Localization)
+CREATE TABLE IF NOT EXISTS countries (
+    country_code CHAR(2) PRIMARY KEY,
+    country_name VARCHAR(100) NOT NULL
+);
+
+-- 0.1 업체 정보 (Company Information)
+CREATE TABLE IF NOT EXISTS company (
+    company_id SERIAL PRIMARY KEY,
+    company_name VARCHAR(255) NOT NULL,
+    business_number VARCHAR(50) UNIQUE NOT NULL,
+    ceo_name VARCHAR(100),
+    address TEXT,
+    factory_address TEXT,
+    contact_phone VARCHAR(50),
+    contact_email VARCHAR(255),
+    company_type VARCHAR(50) CHECK (company_type IN ('제조사(OEM/ODM)', '브랜드사', '원료사')),
+    specialty VARCHAR(255),
+    certifications JSONB,
+    is_verified BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 0.2 카테고리 정보 (Category Information)
+CREATE TABLE IF NOT EXISTS category (
+    category_id SERIAL PRIMARY KEY,
+    group_code1 VARCHAR(2),
+    group_code2 VARCHAR(2),
+    group_code3 VARCHAR(2) DEFAULT '00',
+    group_code4 VARCHAR(2) DEFAULT '00',
+    group_code1_desc VARCHAR(1024),
+    group_code2_desc VARCHAR(1024),
+    group_code3_desc VARCHAR(1024),
+    group_code4_desc VARCHAR(1024),
+    code VARCHAR(10),
+    code_desc VARCHAR(1024),
+    code_name_kr VARCHAR(100),
+    code_name_eng VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 1. 공통 기반 인프라 (Core Infrastructure)
+CREATE TABLE IF NOT EXISTS buyer (
+    buyer_id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(50) NOT NULL CHECK (role IN ('Admin', 'Manufacturer', 'Client')),
+    name VARCHAR(100),
+    phone VARCHAR(50),
+    country_code CHAR(2) REFERENCES countries(country_code),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. 제품 개발 및 프로젝트 (Development & Projects)
+
+-- 제품 개발 의뢰 (Inquiry & Requests)
+CREATE TABLE IF NOT EXISTS inquiries (
+    inquiry_id SERIAL PRIMARY KEY,
+    buyer_id INTEGER REFERENCES buyer(buyer_id),
+    company_id INTEGER REFERENCES company(company_id) ON DELETE SET NULL,
+    brand_name VARCHAR(255) NOT NULL,
+    registration_num VARCHAR(100),
+    website_url TEXT,
+    item_type VARCHAR(100),
+    target_price DECIMAL(10, 2),
+    scent_pref TEXT,
+    container_type VARCHAR(100),
+    capacity VARCHAR(50),
+    quantity INTEGER,
+    cosmax_pkg_item_id INTEGER,
+    export_countries TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 패키징 및 부자재 라이브러리 (Packaging Assets)
+CREATE TABLE IF NOT EXISTS cosmax_pkg_items (
+    cosmax_pkg_item_id SERIAL PRIMARY KEY,
+    type VARCHAR(100), -- Tube, Pump, Cap, etc.
+    formulation_compatibility TEXT,
+    material VARCHAR(100),
+    capacity_options TEXT,
+    design_type_mold VARCHAR(50), -- fixed/exclusive
+    status VARCHAR(50) DEFAULT 'Available',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 개발 프로젝트 관리 (Project Lifecycle)
+CREATE TABLE IF NOT EXISTS projects (
+    project_id SERIAL PRIMARY KEY,
+    inquiry_id INTEGER REFERENCES inquiries(inquiry_id) ON DELETE CASCADE,
+    status_code VARCHAR(50), -- Pending, Quoting, Contracted, Ordering, Producing, Releasing
+    current_phase_percent INTEGER DEFAULT 0 CHECK (current_phase_percent >= 0 AND current_phase_percent <= 100),
+    start_at TIMESTAMP WITH TIME ZONE,
+    expected_completion_at TIMESTAMP WITH TIME ZONE,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 프로젝트 상태 변경 이력 로그 (Project Status Logs)
+CREATE TABLE IF NOT EXISTS project_status_logs (
+    log_id SERIAL PRIMARY KEY,
+    project_id INTEGER REFERENCES projects(project_id) ON DELETE CASCADE,
+    status_code VARCHAR(50) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 품질 관리 결과 (Quality Controls)
+CREATE TABLE IF NOT EXISTS quality_controls (
+    qc_id SERIAL PRIMARY KEY,
+    production_schedule_id INTEGER REFERENCES production_schedules(schedule_id) ON DELETE CASCADE,
+    project_id INTEGER REFERENCES projects(project_id) ON DELETE CASCADE,
+    test_type VARCHAR(100), -- 예: 정기검사, 출하검사 등
+    result_status_code VARCHAR(20) DEFAULT '1400000001', -- 검사대기 (Group 14)
+    test_log TEXT,
+    inspector_name VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 인사이트 리포트 (Insight Reports)
+CREATE TABLE IF NOT EXISTS insight_reports (
+    report_id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    insight_pillars_code VARCHAR(20),     -- 인사이트 핵심 필라 (Group 17)
+    summary TEXT,                        -- 요약 문구
+    content_body TEXT,                   -- 리포트 본문
+    cover_image_url TEXT,                -- 표지 이미지
+    view_count INTEGER DEFAULT 0,
+    published_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 트렌드 키워드 (Trend Keywords & Vector Search)
+CREATE TABLE IF NOT EXISTS trend_keywords (
+    keyword_id SERIAL PRIMARY KEY,
+    keyword VARCHAR(100) NOT NULL,
+    trend_type_code VARCHAR(10),         -- 성분, 효능, 제형, 컨셉, 지역 (Group 16)
+    trend_score INTEGER DEFAULT 0,       -- 핫 지수
+    trend_vector vector(1536),           -- AI 임베딩 벡터
+    summary TEXT,                        -- 한 줄 설명
+    related_ingredient_ids INTEGER[],    -- 관련 성분들 (No FK)
+    related_product_ids INTEGER[],       -- 관련 상품들 (No FK)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 시장 통계 데이터 (Market Statistics)
+CREATE TABLE IF NOT EXISTS market_statistics (
+    stat_id SERIAL PRIMARY KEY,
+    stat_type VARCHAR(50) NOT NULL,       -- 데이터 성격 (Growth, MarketShare 등)
+    target_region VARCHAR(50),            -- 국가/지역 필터링
+    target_category VARCHAR(50),          -- 제품군 필터링
+    period VARCHAR(20) NOT NULL,          -- 기준 기간 (2025-Q1 등)
+    data_json JSONB NOT NULL,             -- 차트용 수치 데이터
+    description TEXT,                     -- 전문가 코멘트
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- AI 대화 세션 (AI Chat Sessions)
+CREATE TABLE IF NOT EXISTS ai_chat_sessions (
+    session_id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES buyer(buyer_id) ON DELETE CASCADE,
+    title VARCHAR(255),
+    status_code VARCHAR(20) DEFAULT '1800000001',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- AI 대화 상세 (AI Chat Messages)
+CREATE TABLE IF NOT EXISTS ai_chat_messages (
+    message_id SERIAL PRIMARY KEY,
+    session_id INTEGER REFERENCES ai_chat_sessions(session_id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL,
+    content TEXT NOT NULL,
+    metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- AI 컨설팅 브리프 (AI Consulting Briefs)
+CREATE TABLE IF NOT EXISTS ai_consulting_briefs (
+    brief_id SERIAL PRIMARY KEY,
+    session_id INTEGER REFERENCES ai_chat_sessions(session_id) ON DELETE CASCADE,
+    proposed_strategy TEXT,
+    recommended_items JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 제품별 표준 품질 규격 (Standard Product Quality Specs)
+CREATE TABLE IF NOT EXISTS product_qc_specs (
+    spec_id SERIAL PRIMARY KEY,
+    product_id INTEGER REFERENCES product(product_id) ON DELETE CASCADE,
+    test_parameter_code VARCHAR(100) NOT NULL, -- 예: pH, 비중, 점도, 성상
+    min_value NUMERIC(15, 4),
+    max_value NUMERIC(15, 4),
+    target_value VARCHAR(100),            -- 수치가 아닌 경우 (예: "특이한 향취가 없을 것")
+    unit VARCHAR(20),                     -- 단위 (예: pH, cps, g/mL)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- QC 상세 시험 결과 (Detailed QC Test Results)
+CREATE TABLE IF NOT EXISTS qc_items (
+    qc_item_id SERIAL PRIMARY KEY,
+    qc_id INTEGER REFERENCES quality_controls(qc_id) ON DELETE CASCADE,
+    test_parameter_code VARCHAR(100) NOT NULL,
+    spec_range VARCHAR(255),              -- 검사 당시의 기준치 (이력 보존용)
+    actual_value VARCHAR(255),            -- 실제 측정치
+    result_status_code VARCHAR(10),       -- 1400000003(합격), 1400000004(불합격)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 검체 보관 관리 (Reference Sample Management)
+CREATE TABLE IF NOT EXISTS reference_samples (
+    sample_id SERIAL PRIMARY KEY,
+    production_schedule_id INTEGER REFERENCES production_schedules(schedule_id) ON DELETE CASCADE,
+    storage_location VARCHAR(255),
+    sample_quantity VARCHAR(50),          -- 예: "100g", "2ea"
+    storage_condition VARCHAR(100) DEFAULT 'Room Temperature',
+    collected_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    expiry_date TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 시험성적서 발행 이력 (CoA Logs)
+CREATE TABLE IF NOT EXISTS coa_logs (
+    coa_id SERIAL PRIMARY KEY,
+    qc_id INTEGER REFERENCES quality_controls(qc_id) ON DELETE CASCADE,
+    coa_no VARCHAR(100) UNIQUE,           -- 성적서 고유 번호
+    issued_by_id INTEGER REFERENCES buyer(buyer_id) ON DELETE SET NULL,
+    issued_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    recipient_name VARCHAR(255),
+    coa_data_snapshot JSONB,              -- 발행 당시의 QC 데이터 스냅샷 (무결성)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 최종 출하 승인 (Outbound Approvals)
+CREATE TABLE IF NOT EXISTS outbound_approvals (
+    approval_id SERIAL PRIMARY KEY,
+    order_id INTEGER REFERENCES orders(order_id) ON DELETE CASCADE,
+    qc_status_code VARCHAR(20),           -- 품질 합격 여부 (Group 14 연동)
+    settlement_status_code VARCHAR(20),   -- 정산 완료 여부 (Group 15 연동)
+    final_decision VARCHAR(50) DEFAULT 'Pending', -- Pending, Approved, Rejected
+    approver_id INTEGER REFERENCES buyer(buyer_id) ON DELETE SET NULL,
+    approved_at TIMESTAMP WITH TIME ZONE,
+    remarks TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 화장품 기초 원료 카탈로그 (Cosmetics Ingredients Catalog)
+CREATE TABLE IF NOT EXISTS ingredients (
+    ingredient_id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    inci_name VARCHAR(255),
+    cas_no VARCHAR(50),
+    function TEXT,
+    ewg_grade VARCHAR(10),
+    sensory_attribute_vector vector(15), -- AI 매칭을 위한 15차원 원료 감각 벡터
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 원료 감각적 속성 (Ingredient Sensory Attributes)
+CREATE TABLE IF NOT EXISTS ingredients_sensory_attribute (
+    ingredients_sensory_attribute_id SERIAL PRIMARY KEY,
+    ingredient_id INTEGER REFERENCES ingredients(ingredient_id) ON DELETE CASCADE,
+    sensory_attribute_code VARCHAR(50),
+    point NUMERIC(2, 1) CHECK (point >= 1.0 AND point <= 5.0),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- R&D 자산 및 지식 기반 (R&D Assets)
+CREATE TABLE IF NOT EXISTS cosmax_r_and_d_assets (
+    cosmax_r_and_d_asset_id SERIAL PRIMARY KEY,
+    asset_type VARCHAR(50), -- Ingredient, Formula, Patent
+    name TEXT NOT NULL,
+    patent_number VARCHAR(100),
+    usage_count INTEGER DEFAULT 0,
+    trend_tags TEXT, -- 키워드 해시태그 목록
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2.4 R&D 상세 데이터 라이브러리 (R&D Deep Data Library)
+
+-- 제형 상세 레시피 (Formula Recipes)
+CREATE TABLE IF NOT EXISTS formula_recipes (
+    recipe_id SERIAL PRIMARY KEY,
+    asset_id INTEGER REFERENCES cosmax_r_and_d_assets(cosmax_r_and_d_asset_id) ON DELETE CASCADE,
+    ingredient_id INTEGER REFERENCES ingredients(ingredient_id) ON DELETE CASCADE,
+    percentage NUMERIC(5,3) NOT NULL,
+    phase VARCHAR(10),
+    purpose VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 원료 효능 매핑 (Ingredient Efficacies)
+CREATE TABLE IF NOT EXISTS ingredient_efficacies (
+    efficacy_id SERIAL PRIMARY KEY,
+    ingredient_id INTEGER REFERENCES ingredients(ingredient_id) ON DELETE CASCADE,
+    category_id INTEGER REFERENCES category(category_id) ON DELETE CASCADE,
+    strength INTEGER CHECK (strength >= 1 AND strength <= 5),
+    evidence_level VARCHAR(50),
+    is_certified BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 독점 자산 관리 (Exclusive Assets)
+CREATE TABLE IF NOT EXISTS exclusive_assets (
+    exclusive_id SERIAL PRIMARY KEY,
+    asset_id INTEGER REFERENCES cosmax_r_and_d_assets(cosmax_r_and_d_asset_id) ON DELETE CASCADE,
+    company_id INTEGER REFERENCES company(company_id) ON DELETE CASCADE,
+    exclusive_type VARCHAR(50),
+    start_date DATE,
+    end_date DATE,
+    region VARCHAR(50) DEFAULT 'Global',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE formula_recipes IS 'R&D 자산(제형)의 상세 성분 배합 레시피';
+COMMENT ON COLUMN formula_recipes.recipe_id IS '레시피 일련번호';
+COMMENT ON COLUMN formula_recipes.asset_id IS 'R&D 자산 ID';
+COMMENT ON COLUMN formula_recipes.ingredient_id IS '포함된 원료 ID';
+COMMENT ON COLUMN formula_recipes.percentage IS '성분 배합 비율 (%%)';
+COMMENT ON COLUMN formula_recipes.phase IS '제조 공정 단계 (A상, B상, C상 등)';
+COMMENT ON COLUMN formula_recipes.purpose IS '배합 목적 (유화제, 보습제 등)';
+
+COMMENT ON TABLE ingredient_efficacies IS '원료별 정밀 효능 데이터 (미백, 주름 등)';
+COMMENT ON COLUMN ingredient_efficacies.efficacy_id IS '효능 매핑 일련번호';
+COMMENT ON COLUMN ingredient_efficacies.ingredient_id IS '관련 원료 ID';
+COMMENT ON COLUMN ingredient_efficacies.category_id IS '효능 카테고리 ID (category 참조)';
+COMMENT ON COLUMN ingredient_efficacies.strength IS '효능 강도 (1-5점)';
+COMMENT ON COLUMN ingredient_efficacies.evidence_level IS '근거 수준 (임상, In-vitro 등)';
+COMMENT ON COLUMN ingredient_efficacies.is_certified IS '식약처 고시 인증 성분 여부';
+
+COMMENT ON TABLE exclusive_assets IS '자산별 독점권 및 소유권 관리';
+COMMENT ON COLUMN exclusive_assets.exclusive_id IS '독점 관리 일련번호';
+COMMENT ON COLUMN exclusive_assets.asset_id IS '독점 대상 자산 ID';
+COMMENT ON COLUMN exclusive_assets.company_id IS '독점권을 가진 업체 ID';
+COMMENT ON COLUMN exclusive_assets.exclusive_type IS '독점 유형 (특허 소유, 독점 계약 등)';
+COMMENT ON COLUMN exclusive_assets.region IS '독점 지역 범위';
+COMMENT ON COLUMN exclusive_assets.is_active IS '현재 활성화 여부';
+
+
+-- 3. 유통 및 주문 관리 (Distribution & Orders)
+
+-- 글로벌 브랜드 정보
+CREATE TABLE IF NOT EXISTS brands (
+    brand_id SERIAL PRIMARY KEY,
+    company_id INTEGER REFERENCES company(company_id) ON DELETE SET NULL,
+    brand_name VARCHAR(255) NOT NULL,
+    logo_url TEXT,
+    brand_desc TEXT,
+    partnership_type VARCHAR(100),
+    official_status BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 도매 상품 정보
+CREATE TABLE IF NOT EXISTS product (
+    product_id SERIAL PRIMARY KEY,
+    brand_id INTEGER REFERENCES brands(brand_id) ON DELETE SET NULL,
+    category_id INTEGER,
+    sku VARCHAR(100) UNIQUE,
+    product_name TEXT NOT NULL,
+    description TEXT,
+    retail_price DECIMAL(12, 2),
+    wholesale_base_price DECIMAL(12, 2),
+    moq INTEGER DEFAULT 1,
+    stock_quantity INTEGER DEFAULT 0,
+    status VARCHAR(50), -- In_Stock, Out_of_Stock, U_Quick_Ready
+    sensory_attribute_vector vector(15),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 제품 감각적 속성 (Sensory Attributes)
+CREATE TABLE IF NOT EXISTS product_sensory_attribute (
+    product_sensory_attribute_id SERIAL PRIMARY KEY,
+    product_id INTEGER REFERENCES product(product_id) ON DELETE CASCADE,
+    attribute_code VARCHAR(50),
+    attribute_name VARCHAR(100),
+    point NUMERIC(2, 1) CHECK (point >= 1.0 AND point <= 5.0),
+    "desc" TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3.1 디지털 조색 및 색상 마스터 (Color Management)
+CREATE TABLE IF NOT EXISTS color_master (
+    color_id SERIAL PRIMARY KEY,
+    product_id INTEGER REFERENCES product(product_id) ON DELETE CASCADE,
+    color_name VARCHAR(255) NOT NULL,
+    hex_code VARCHAR(7),
+    lab_l NUMERIC(5,2),
+    lab_a NUMERIC(5,2),
+    lab_b NUMERIC(5,2),
+    illuminant VARCHAR(20) DEFAULT 'D65',
+    observer VARCHAR(20) DEFAULT '10deg',
+    tolerance NUMERIC(3,2) DEFAULT 1.0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3.2 색상 측정 및 품질 관리 이력 (Color Measurement Log)
+CREATE TABLE IF NOT EXISTS color_measurement_log (
+    measurement_id SERIAL PRIMARY KEY,
+    color_id INTEGER REFERENCES color_master(color_id) ON DELETE CASCADE,
+    project_id INTEGER REFERENCES projects(project_id) ON DELETE SET NULL,
+    measured_l NUMERIC(5,2),
+    measured_a NUMERIC(5,2),
+    measured_b NUMERIC(5,2),
+    delta_e NUMERIC(5,2),
+    is_pass BOOLEAN,
+    measured_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE color_master IS '제품별 표준 색상 정보 (Digital Color Master)';
+COMMENT ON COLUMN color_master.color_id IS '색상 고유 식별 번호';
+COMMENT ON COLUMN color_master.product_id IS '연관 제품 ID';
+COMMENT ON COLUMN color_master.color_name IS '색상 명칭';
+COMMENT ON COLUMN color_master.hex_code IS 'UI 표시용 HEX 코드';
+COMMENT ON COLUMN color_master.lab_l IS '기준 명도 (L*)';
+COMMENT ON COLUMN color_master.lab_a IS '기준 색도 (a*)';
+COMMENT ON COLUMN color_master.lab_b IS '기준 색도 (b*)';
+COMMENT ON COLUMN color_master.illuminant IS '표준 광원 (D65 등)';
+COMMENT ON COLUMN color_master.observer IS '표준 관측자 (2deg, 10deg)';
+COMMENT ON COLUMN color_master.tolerance IS '색차 합격 허용 범위';
+
+COMMENT ON TABLE color_measurement_log IS '실제 색상 측정 및 품질 관리 로그';
+COMMENT ON COLUMN color_measurement_log.measurement_id IS '측정 이력 고유 ID';
+COMMENT ON COLUMN color_measurement_log.color_id IS '관련 표준 색상 ID';
+COMMENT ON COLUMN color_measurement_log.project_id IS '연관 프로젝트 ID';
+COMMENT ON COLUMN color_measurement_log.measured_l IS '측정 명도 (L*)';
+COMMENT ON COLUMN color_measurement_log.measured_a IS '측정 색도 (a*)';
+COMMENT ON COLUMN color_measurement_log.measured_b IS '측정 색도 (b*)';
+COMMENT ON COLUMN color_measurement_log.delta_e IS '계산된 색차 (Target vs Measured)';
+COMMENT ON COLUMN color_measurement_log.is_pass IS '색차 기준 합격 여부';
+
+-- 도매 가격 티어링 정책
+CREATE TABLE IF NOT EXISTS price_tiers (
+    price_tier_id SERIAL PRIMARY KEY,
+    product_id INTEGER REFERENCES product(product_id) ON DELETE CASCADE,
+    min_quantity INTEGER NOT NULL,
+    unit_price DECIMAL(12, 2) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 글로벌 주문 정보
+CREATE TABLE IF NOT EXISTS orders (
+    order_id SERIAL PRIMARY KEY,
+    buyer_id INTEGER REFERENCES buyer(buyer_id),
+    order_status VARCHAR(50), -- Processing, Shipped, Delivered, Canceled
+    total_amount DECIMAL(15, 2),
+    currency VARCHAR(10) DEFAULT 'USD',
+    shipping_method VARCHAR(100),
+    tracking_num VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 주문 상세 항목
+CREATE TABLE IF NOT EXISTS order_items (
+    order_item_id SERIAL PRIMARY KEY,
+    order_id INTEGER REFERENCES orders(order_id) ON DELETE CASCADE,
+    product_id INTEGER REFERENCES product(product_id),
+    quantity INTEGER NOT NULL,
+    unit_price_at_order DECIMAL(12, 2) NOT NULL,
+    subtotal DECIMAL(15, 2),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 특수 세일 및 아울렛 딜 (U-Outlet)
+CREATE TABLE IF NOT EXISTS outlet_deals (
+    outlet_deal_id SERIAL PRIMARY KEY,
+    product_id INTEGER REFERENCES product(product_id) ON DELETE CASCADE,
+    discount_rate DECIMAL(5, 2), -- ex: 25.50 (25.5%%)
+    start_at TIMESTAMP WITH TIME ZONE,
+    end_at TIMESTAMP WITH TIME ZONE,
+    flash_sale_status VARCHAR(50), -- Active, Expired
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 초기 기초 데이터 삽입 (Basic Data)
+INSERT INTO countries (country_code, country_name) VALUES 
+('KR', 'South Korea'),
+('US', 'United States'),
+('CN', 'China'),
+('JP', 'Japan'),
+('VN', 'Vietnam'),
+('TH', 'Thailand')
+ON CONFLICT (country_code) DO NOTHING;
+
+-- 4. 컬럼 및 테이블 주석 (Korean Metadata)
+
+-- 4.0 공통/기초 정보
+COMMENT ON TABLE countries IS '국가 정보 (Localization)';
+COMMENT ON COLUMN countries.country_code IS '국가코드 (ISO 3166-1 alpha-2)';
+COMMENT ON COLUMN countries.country_name IS '국가명';
+
+COMMENT ON TABLE company IS '기업 정보 (Company Information)';
+COMMENT ON COLUMN company.company_id IS '기업ID (PK)';
+COMMENT ON COLUMN company.company_name IS '기업명 (법인명)';
+COMMENT ON COLUMN company.business_number IS '사업자등록번호';
+COMMENT ON COLUMN company.ceo_name IS '대표자명';
+COMMENT ON COLUMN company.address IS '본사주소';
+COMMENT ON COLUMN company.factory_address IS '제조시설주소';
+COMMENT ON COLUMN company.contact_phone IS '대표전화번호';
+COMMENT ON COLUMN company.contact_email IS '담당자이메일';
+COMMENT ON COLUMN company.company_type IS '기업유형 (제조사, 브랜드사, 원료사)';
+COMMENT ON COLUMN company.specialty IS '주력분야';
+COMMENT ON COLUMN company.certifications IS '보유인증 (JSON)';
+COMMENT ON COLUMN company.is_verified IS '검증여부 (플랫폼 자체 검증)';
+COMMENT ON COLUMN company.created_at IS '생성일시';
+COMMENT ON COLUMN company.updated_at IS '수정일시';
+
+COMMENT ON TABLE category IS '계층형 카테고리 정보 (Common Codes)';
+COMMENT ON COLUMN category.category_id IS '카테고리ID (PK)';
+COMMENT ON COLUMN category.group_code1 IS '그룹코드1 (대분류)';
+COMMENT ON COLUMN category.group_code2 IS '그룹코드2 (중분류)';
+COMMENT ON COLUMN category.group_code3 IS '그룹코드3 (소분류)';
+COMMENT ON COLUMN category.group_code4 IS '그룹코드4 (세분류)';
+COMMENT ON COLUMN category.group_code1_desc IS '그룹코드1설명';
+COMMENT ON COLUMN category.group_code2_desc IS '그룹코드2설명';
+COMMENT ON COLUMN category.group_code3_desc IS '그룹코드3설명';
+COMMENT ON COLUMN category.group_code4_desc IS '그룹코드4설명';
+COMMENT ON COLUMN category.code IS '코드 (통합 코드 필드)';
+COMMENT ON COLUMN category.code_desc IS '코드설명';
+COMMENT ON COLUMN category.code_name_kr IS '코드명(국문)';
+COMMENT ON COLUMN category.code_name_eng IS '코드명(영문)';
+COMMENT ON COLUMN category.created_at IS '생성일시';
+COMMENT ON COLUMN category.updated_at IS '수정일시';
+
+COMMENT ON TABLE buyer IS '사용자 계정 정보 (Buyer/User Account)';
+COMMENT ON COLUMN buyer.buyer_id IS '사용자ID (PK)';
+COMMENT ON COLUMN buyer.email IS '이메일 (로그인ID)';
+COMMENT ON COLUMN buyer.password_hash IS '비밀번호해시';
+COMMENT ON COLUMN buyer.role IS '사용자권한 (Admin, Manufacturer, Client)';
+COMMENT ON COLUMN buyer.name IS '사용자명';
+COMMENT ON COLUMN buyer.phone IS '연락처';
+COMMENT ON COLUMN buyer.country_code IS '국가코드 (FK: countries)';
+COMMENT ON COLUMN buyer.created_at IS '생성일시';
+
+-- 4.1 제품 개발 워크플로우
+COMMENT ON TABLE inquiries IS '제품 개발 의뢰 (Inquiry)';
+COMMENT ON COLUMN inquiries.inquiry_id IS '의뢰ID (PK)';
+COMMENT ON COLUMN inquiries.buyer_id IS '사용자ID (FK: buyer)';
+COMMENT ON COLUMN inquiries.company_id IS '업체ID (FK: company)';
+COMMENT ON COLUMN inquiries.brand_name IS '의뢰브랜드명';
+COMMENT ON COLUMN inquiries.registration_num IS '의뢰용사업자번호';
+COMMENT ON COLUMN inquiries.website_url IS '웹사이트URL';
+COMMENT ON COLUMN inquiries.item_type IS '품목유형';
+COMMENT ON COLUMN inquiries.target_price IS '타겟단가';
+COMMENT ON COLUMN inquiries.scent_pref IS '향선호도';
+COMMENT ON COLUMN inquiries.container_type IS '용기유형';
+COMMENT ON COLUMN inquiries.capacity IS '용량';
+COMMENT ON COLUMN inquiries.quantity IS '의뢰수량';
+COMMENT ON COLUMN inquiries.cosmax_pkg_item_id IS '패키징아이템ID (FK: cosmax_pkg_items)';
+COMMENT ON COLUMN inquiries.export_countries IS '수출대상국';
+COMMENT ON COLUMN inquiries.created_at IS '생성일시';
+
+COMMENT ON TABLE inquiry_questions IS '의뢰 상세 문진 매핑 (Inquiry Questions)';
+COMMENT ON COLUMN inquiry_questions.questionnaire_id IS '문진일련번호 (PK)';
+COMMENT ON COLUMN inquiry_questions.inquiry_id IS '의뢰ID (FK: inquiries)';
+COMMENT ON COLUMN inquiry_questions.category_id IS '항목카테고리ID (FK: category)';
+COMMENT ON COLUMN inquiry_questions.score IS '항목중요도점수';
+COMMENT ON COLUMN inquiry_questions.comments IS '추가의견';
+COMMENT ON COLUMN inquiry_questions.created_at IS '생성일시';
+
+COMMENT ON TABLE projects IS '개발 프로젝트 마스터 (Project Management)';
+COMMENT ON COLUMN projects.project_id IS '프로젝트ID (PK)';
+COMMENT ON COLUMN projects.inquiry_id IS '의뢰ID (FK: inquiries)';
+COMMENT ON COLUMN projects.status_code IS '프로젝트상태코드';
+COMMENT ON COLUMN projects.current_phase_percent IS '현재진행률(%%)';
+COMMENT ON COLUMN projects.start_at IS '시작일시';
+COMMENT ON COLUMN projects.expected_completion_at IS '완료예정일시';
+COMMENT ON COLUMN projects.updated_at IS '수정일시';
+
+COMMENT ON TABLE project_status_logs IS '프로젝트 상태 변경 이력 (Project Timeline)';
+COMMENT ON COLUMN project_status_logs.log_id IS '로그ID (PK)';
+COMMENT ON COLUMN project_status_logs.project_id IS '프로젝트ID (FK: projects)';
+COMMENT ON COLUMN project_status_logs.status_code IS '변경된상태코드';
+COMMENT ON COLUMN project_status_logs.description IS '상태변경설명';
+COMMENT ON COLUMN project_status_logs.created_at IS '생성일시 (로그시점)';
+
+COMMENT ON TABLE cosmax_pkg_items IS '패키징 라이브러리 (Packaging Assets)';
+COMMENT ON COLUMN cosmax_pkg_items.cosmax_pkg_item_id IS '패키징ID (PK)';
+COMMENT ON COLUMN cosmax_pkg_items.type IS '패키징유형 (Tube, Pump 등)';
+COMMENT ON COLUMN cosmax_pkg_items.formulation_compatibility IS '제형적합성설명';
+COMMENT ON COLUMN cosmax_pkg_items.material IS '재질';
+COMMENT ON COLUMN cosmax_pkg_items.capacity_options IS '용량옵션정보';
+COMMENT ON COLUMN cosmax_pkg_items.design_type_mold IS '금형디자인유형';
+COMMENT ON COLUMN cosmax_pkg_items.status IS '재고상태';
+COMMENT ON COLUMN cosmax_pkg_items.created_at IS '등록일시';
+
+COMMENT ON TABLE compatibility_tests IS '제형-용기 적합성 테스트 (C/T Test)';
+COMMENT ON COLUMN compatibility_tests.test_id IS '테스트ID (PK)';
+COMMENT ON COLUMN compatibility_tests.inquiry_id IS '의뢰ID (FK: inquiries)';
+COMMENT ON COLUMN compatibility_tests.cosmax_pkg_item_id IS '패키징ID (FK: cosmax_pkg_items)';
+COMMENT ON COLUMN compatibility_tests.test_result IS '테스트결과내용';
+COMMENT ON COLUMN compatibility_tests.status IS '테스트진행상태';
+COMMENT ON COLUMN compatibility_tests.created_at IS '생성일시';
+COMMENT ON COLUMN compatibility_tests.updated_at IS '수정일시';
+
+COMMENT ON TABLE compliance_rules IS '글로벌 성분 규제 정보 (Compliance)';
+COMMENT ON COLUMN compliance_rules.rule_id IS '규제ID (PK)';
+COMMENT ON COLUMN compliance_rules.country_code IS '국가코드';
+COMMENT ON COLUMN compliance_rules.ingredient_name IS '성분명';
+COMMENT ON COLUMN compliance_rules.restriction_type IS '제한유형 (Banned, Restricted 등)';
+COMMENT ON COLUMN compliance_rules.max_concentration IS '최대배합한도';
+COMMENT ON COLUMN compliance_rules.guideline_text IS '가이드라인상세';
+COMMENT ON COLUMN compliance_rules.created_at IS '등록일시';
+COMMENT ON COLUMN compliance_rules.updated_at IS '수정일시';
+
+-- 1.1 파트너 레이팅 및 관리 (Partner Ratings)
+CREATE TABLE IF NOT EXISTS partner_ratings (
+    rating_id SERIAL PRIMARY KEY,
+    target_company_id INTEGER REFERENCES company(company_id) ON DELETE CASCADE,
+    reviewer_buyer_id INTEGER REFERENCES buyer(buyer_id) ON DELETE SET NULL,
+    score NUMERIC(2, 1) CHECK (score >= 1.0 AND score <= 5.0),
+    review_text TEXT,
+    evaluation_criteria JSONB, -- 예: {"quality": 5, "communication": 4, "delivery": 5}
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE partner_ratings IS '업체 간 신용도 및 파트너십 평가 (레이팅)';
+COMMENT ON COLUMN partner_ratings.rating_id IS '평가 고유 식별 번호';
+COMMENT ON COLUMN partner_ratings.target_company_id IS '평가를 받는 회사의 ID';
+COMMENT ON COLUMN partner_ratings.reviewer_buyer_id IS '평가를 남긴 사용자 ID';
+COMMENT ON COLUMN partner_ratings.score IS '종합 별점 (1.0 ~ 5.0)';
+COMMENT ON COLUMN partner_ratings.review_text IS '세부 리뷰 텍스트';
+COMMENT ON COLUMN partner_ratings.evaluation_criteria IS '세부 평가 항목 (품질, 소통 등 JSON)';
+
+-- 2.1 제형-용기 적합성 테스트 (Compatibility Tests - C/T)
+CREATE TABLE IF NOT EXISTS compatibility_tests (
+    test_id SERIAL PRIMARY KEY,
+    inquiry_id INTEGER REFERENCES inquiries(inquiry_id) ON DELETE CASCADE,
+    cosmax_pkg_item_id INTEGER REFERENCES cosmax_pkg_items(cosmax_pkg_item_id) ON DELETE CASCADE,
+    test_result TEXT,
+    status VARCHAR(50) DEFAULT 'Testing', -- Testing, Pass, Fail
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE compatibility_tests IS '제형-용기 적합성 및 안정성 테스트 결과';
+COMMENT ON COLUMN compatibility_tests.test_id IS '테스트 식별 번호';
+COMMENT ON COLUMN compatibility_tests.inquiry_id IS '제형 의뢰 ID';
+COMMENT ON COLUMN compatibility_tests.cosmax_pkg_item_id IS '선정된 패키징 라이브러리 ID';
+COMMENT ON COLUMN compatibility_tests.status IS '테스트 진행 상태';
+
+-- 2.2 글로벌 컴플라이언스 가이드 (Global Compliance Rules)
+CREATE TABLE IF NOT EXISTS compliance_rules (
+    rule_id SERIAL PRIMARY KEY,
+    country_code VARCHAR(10) NOT NULL,
+    ingredient_name VARCHAR(255) NOT NULL,
+    restriction_type VARCHAR(50) NOT NULL, -- Banned, Restricted, Allowed
+    max_concentration VARCHAR(50),
+    guideline_text TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE compliance_rules IS '글로벌 성분 규제 정보 (Compliance)';
+COMMENT ON COLUMN compliance_rules.rule_id IS '규제ID (PK)';
+COMMENT ON COLUMN compliance_rules.country_code IS '국가코드';
+COMMENT ON COLUMN compliance_rules.ingredient_name IS '성분명';
+COMMENT ON COLUMN compliance_rules.restriction_type IS '제한유형 (Banned, Restricted 등)';
+COMMENT ON COLUMN compliance_rules.max_concentration IS '최대배합한도';
+COMMENT ON COLUMN compliance_rules.guideline_text IS '가이드라인상세';
+COMMENT ON COLUMN compliance_rules.created_at IS '등록일시';
+COMMENT ON COLUMN compliance_rules.updated_at IS '수정일시';
+
+-- 2.3 상세 문진표 (Inquiry Questions - Target Efficacy, Concept Ingredients, etc.)
+CREATE TABLE IF NOT EXISTS inquiry_questions (
+    questionnaire_id SERIAL PRIMARY KEY,
+    inquiry_id INTEGER REFERENCES inquiries(inquiry_id) ON DELETE CASCADE,
+    category_id INTEGER REFERENCES category(category_id) ON DELETE CASCADE,
+    score INTEGER,
+    comments TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE inquiry_questions IS '의뢰 상세 문진 매핑 (Inquiry Questions)';
+COMMENT ON COLUMN inquiry_questions.questionnaire_id IS '문진일련번호 (PK)';
+COMMENT ON COLUMN inquiry_questions.inquiry_id IS '의뢰ID (FK: inquiries)';
+COMMENT ON COLUMN inquiry_questions.category_id IS '항목카테고리ID (FK: category)';
+COMMENT ON COLUMN inquiry_questions.score IS '항목중요도점수';
+COMMENT ON COLUMN inquiry_questions.comments IS '추가의견';
+COMMENT ON COLUMN inquiry_questions.created_at IS '생성일시';
+
+COMMENT ON TABLE ingredients IS '원료 마스터 사전 (Ingredient Catalog)';
+COMMENT ON COLUMN ingredients.ingredient_id IS '원료ID (PK)';
+COMMENT ON COLUMN ingredients.name IS '원료명(국문/일반명)';
+COMMENT ON COLUMN ingredients.inci_name IS '단일성분명(INCI)';
+COMMENT ON COLUMN ingredients.cas_no IS '화학물질번호(CAS)';
+COMMENT ON COLUMN ingredients.function IS '주요기능';
+COMMENT ON COLUMN ingredients.ewg_grade IS 'EWG등급 (1-10)';
+COMMENT ON COLUMN ingredients.sensory_attribute_vector IS '원료감각벡터 (15차원)';
+COMMENT ON COLUMN ingredients.created_at IS '등록일시';
+COMMENT ON COLUMN ingredients.updated_at IS '수정일시';
+
+COMMENT ON TABLE ingredients_sensory_attribute IS '원료별 감각 지표 (Ingredient Sensory)';
+COMMENT ON COLUMN ingredients_sensory_attribute.ingredients_sensory_attribute_id IS '속성ID (PK)';
+COMMENT ON COLUMN ingredients_sensory_attribute.ingredient_id IS '원료ID (FK: ingredients)';
+COMMENT ON COLUMN ingredients_sensory_attribute.sensory_attribute_code IS '감각속성코드';
+COMMENT ON COLUMN ingredients_sensory_attribute.point IS '속성점수 (1.0~5.0)';
+COMMENT ON COLUMN ingredients_sensory_attribute.created_at IS '등록일시';
+COMMENT ON COLUMN ingredients_sensory_attribute.updated_at IS '수정일시';
+
+-- 4. AI 컨설팅 결과 이력 (AI Consulting History)
+CREATE TABLE IF NOT EXISTS consulting_reports (
+    report_id SERIAL PRIMARY KEY,
+    inquiry_id INTEGER REFERENCES inquiries(inquiry_id) ON DELETE CASCADE,
+    recommended_asset_id INTEGER REFERENCES cosmax_r_and_d_assets(cosmax_r_and_d_asset_id) ON DELETE SET NULL,
+    report_content TEXT NOT NULL,
+    matching_scores JSONB, -- 당시 계산된 후보군별 점수 리스트
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE consulting_reports IS 'AI 개발 컨설팅 리포트 아카이브';
+COMMENT ON COLUMN consulting_reports.report_id IS '리포트ID (PK)';
+COMMENT ON COLUMN consulting_reports.inquiry_id IS '의뢰ID (FK: inquiries)';
+COMMENT ON COLUMN consulting_reports.recommended_asset_id IS '추천자산ID (FK: cosmax_r_and_d_assets)';
+COMMENT ON COLUMN consulting_reports.report_content IS '리포트전문내용';
+COMMENT ON COLUMN consulting_reports.matching_scores IS '매칭점수데이터(JSON)';
+COMMENT ON COLUMN consulting_reports.created_at IS '생성일시';
+
+-- 4.1 스마트 견적 관리 (Quotation Management)
+CREATE TABLE IF NOT EXISTS quotations (
+    quotation_id SERIAL PRIMARY KEY,
+    inquiry_id INTEGER REFERENCES inquiries(inquiry_id) ON DELETE SET NULL,
+    buyer_id INTEGER REFERENCES buyer(buyer_id) ON DELETE CASCADE,
+    company_id INTEGER REFERENCES company(company_id) ON DELETE CASCADE, -- 공급사 ID
+    status VARCHAR(50) DEFAULT 'Draft', -- Draft, Sent, Confirmed, Expired, Canceled
+    total_estimated_amount DECIMAL(15, 2) DEFAULT 0,
+    currency VARCHAR(10) DEFAULT 'USD',
+    valid_until TIMESTAMP WITH TIME ZONE,
+    comments TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS quotation_items (
+    quotation_item_id SERIAL PRIMARY KEY,
+    quotation_id INTEGER REFERENCES quotations(quotation_id) ON DELETE CASCADE,
+    product_id INTEGER REFERENCES product(product_id) ON DELETE SET NULL,
+    cosmax_r_and_d_asset_id INTEGER REFERENCES cosmax_r_and_d_assets(cosmax_r_and_d_asset_id) ON DELETE SET NULL, -- 제형 직접 선택시
+    quantity INTEGER NOT NULL,
+    unit_price DECIMAL(12, 2) NOT NULL,
+    discount_rate DECIMAL(5, 2) DEFAULT 0, -- 할인율 (%%)
+    discount_amount DECIMAL(15, 2) DEFAULT 0, -- 할인금액 (총합에서 차감될 금액)
+    subtotal DECIMAL(15, 2) NOT NULL, -- (개당 단가 * 수량) - 할인금액
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE quotations IS '스마트 견적 마스터 (Quotation)';
+COMMENT ON COLUMN quotations.quotation_id IS '견적ID (PK)';
+COMMENT ON COLUMN quotations.inquiry_id IS '의뢰ID (FK: inquiries)';
+COMMENT ON COLUMN quotations.buyer_id IS '사용자ID (FK: buyer)';
+COMMENT ON COLUMN quotations.company_id IS '공급업체ID (FK: company)';
+COMMENT ON COLUMN quotations.status IS '견적진행상태';
+COMMENT ON COLUMN quotations.total_estimated_amount IS '총합계견적액';
+COMMENT ON COLUMN quotations.currency IS '통화단위';
+COMMENT ON COLUMN quotations.valid_until IS '견적유효기한';
+COMMENT ON COLUMN quotations.comments IS '견적특이사항';
+COMMENT ON COLUMN quotations.created_at IS '생성일시';
+COMMENT ON COLUMN quotations.updated_at IS '수정일시';
+
+COMMENT ON TABLE quotation_items IS '상세 견적 항목 (Quotation Items)';
+COMMENT ON COLUMN quotation_items.quotation_item_id IS '항목ID (PK)';
+COMMENT ON COLUMN quotation_items.quotation_id IS '견적ID (FK: quotations)';
+COMMENT ON COLUMN quotation_items.product_id IS '상품ID (FK: product)';
+COMMENT ON COLUMN quotation_items.cosmax_r_and_d_asset_id IS 'R&D자산ID (FK: cosmax_r_and_d_assets)';
+COMMENT ON COLUMN quotation_items.quantity IS '요청수량';
+COMMENT ON COLUMN quotation_items.unit_price IS '적용단가';
+COMMENT ON COLUMN quotation_items.discount_rate IS '할인율(%%)';
+COMMENT ON COLUMN quotation_items.discount_amount IS '할인금액';
+COMMENT ON COLUMN quotation_items.subtotal IS '항목별소계 (수량*단가 - 할인)';
+COMMENT ON COLUMN quotation_items.created_at IS '생성일시';
+
+-- 4.2 생산 및 공정 관리 (Production Scheduling)
+CREATE TABLE IF NOT EXISTS production_schedules (
+    schedule_id SERIAL PRIMARY KEY,
+    order_id INTEGER REFERENCES orders(order_id) ON DELETE CASCADE,
+    product_id INTEGER REFERENCES product(product_id) ON DELETE SET NULL,
+    batch_no VARCHAR(100), -- 생산 배치 번호
+    line_no VARCHAR(50),  -- 생산 라인 번호
+    planned_start_date DATE,
+    planned_end_date DATE,
+    actual_start_date DATE,
+    actual_end_date DATE,
+    status VARCHAR(50) DEFAULT 'Scheduled', -- Scheduled, In-Progress, Finished, QC-Pending
+    produced_quantity INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 4.3 물류 및 배송 추적 (Shipments & Tracking)
+CREATE TABLE IF NOT EXISTS shipments (
+    shipment_id SERIAL PRIMARY KEY,
+    order_id INTEGER REFERENCES orders(order_id) ON DELETE CASCADE,
+    shipping_company VARCHAR(100),
+    tracking_number VARCHAR(100),
+    shipped_at TIMESTAMP WITH TIME ZONE,
+    estimated_delivery DATE,
+    status VARCHAR(50) DEFAULT 'Preparing', -- Preparing, Shipped, In-Transit, Delivered
+    recipient_name VARCHAR(100),
+    shipping_address TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE production_schedules IS '공장 생산 일정 관리 (Production Schedule)';
+COMMENT ON COLUMN production_schedules.schedule_id IS '일정ID (PK)';
+COMMENT ON COLUMN production_schedules.order_id IS '주문ID (FK: orders)';
+COMMENT ON COLUMN production_schedules.product_id IS '상품ID (FK: product)';
+COMMENT ON COLUMN production_schedules.batch_no IS '생산배치번호(Batch No)';
+COMMENT ON COLUMN production_schedules.line_no IS '생산라인번호(Line No)';
+COMMENT ON COLUMN production_schedules.planned_start_date IS '계획시작일';
+COMMENT ON COLUMN production_schedules.planned_end_date IS '계획종료일';
+COMMENT ON COLUMN production_schedules.actual_start_date IS '실제시작일';
+COMMENT ON COLUMN production_schedules.actual_end_date IS '실제종료일';
+COMMENT ON COLUMN production_schedules.status IS '생산공정현황';
+COMMENT ON COLUMN production_schedules.produced_quantity IS '실제생산수량';
+COMMENT ON COLUMN production_schedules.created_at IS '생성일시';
+COMMENT ON COLUMN production_schedules.updated_at IS '수정일시';
+
+COMMENT ON TABLE shipments IS '물류 및 배송 추적 (Shipments Tracking)';
+COMMENT ON COLUMN shipments.shipment_id IS '배송ID (PK)';
+COMMENT ON COLUMN shipments.order_id IS '주문ID (FK: orders)';
+COMMENT ON COLUMN shipments.shipping_company IS '배송업체명';
+COMMENT ON COLUMN shipments.tracking_number IS '운송장번호';
+COMMENT ON COLUMN shipments.shipped_at IS '출고일시';
+COMMENT ON COLUMN shipments.estimated_delivery IS '인도예정일';
+COMMENT ON COLUMN shipments.status IS '배송상태';
+COMMENT ON COLUMN shipments.recipient_name IS '수령인명';
+COMMENT ON COLUMN shipments.shipping_address IS '원격지주소(수령지)';
+COMMENT ON COLUMN shipments.created_at IS '생성일시';
+COMMENT ON COLUMN shipments.updated_at IS '수정일시';
+
+-- project_status_logs 테이블
+COMMENT ON TABLE project_status_logs IS '프로젝트 상태 변경 이력 (Project Timeline)';
+COMMENT ON COLUMN project_status_logs.log_id IS '로그ID (PK)';
+COMMENT ON COLUMN project_status_logs.project_id IS '프로젝트ID (FK: projects)';
+COMMENT ON COLUMN project_status_logs.status_code IS '변경된상태코드';
+COMMENT ON COLUMN project_status_logs.description IS '상태변경설명';
+COMMENT ON COLUMN project_status_logs.created_at IS '생성일시 (로그시점)';
+
+-- quality_controls 테이블
+COMMENT ON TABLE quality_controls IS '품질 관리 마스터 (Quality Control)';
+COMMENT ON COLUMN quality_controls.qc_id IS 'QC고유번호 (PK)';
+COMMENT ON COLUMN quality_controls.production_schedule_id IS '생산일정ID (FK: production_schedules)';
+COMMENT ON COLUMN quality_controls.project_id IS '프로젝트ID (FK: projects)';
+COMMENT ON COLUMN quality_controls.test_type IS '검사구분(정기, 출하 등)';
+COMMENT ON COLUMN quality_controls.result_status_code IS '검사결과상태코드';
+COMMENT ON COLUMN quality_controls.test_log IS '종합테스트로그';
+COMMENT ON COLUMN quality_controls.inspector_name IS '검사원성명';
+COMMENT ON COLUMN quality_controls.created_at IS '생성일시';
+
+-- product_qc_specs 테이블
+COMMENT ON TABLE product_qc_specs IS '상품별 표준 품질 규격 (Product QC Spec)';
+COMMENT ON COLUMN product_qc_specs.spec_id IS '규격ID (PK)';
+COMMENT ON COLUMN product_qc_specs.product_id IS '상품ID (FK: product)';
+COMMENT ON COLUMN product_qc_specs.test_parameter_code IS '시험항목(pH, 성상 등)';
+COMMENT ON COLUMN product_qc_specs.min_value IS '최소허용치';
+COMMENT ON COLUMN product_qc_specs.max_value IS '최대허용치';
+COMMENT ON COLUMN product_qc_specs.target_value IS '지정타겟값(문구 등)';
+COMMENT ON COLUMN product_qc_specs.unit IS '측정단위';
+COMMENT ON COLUMN product_qc_specs.created_at IS '등록일시';
+
+-- qc_items 테이블
+COMMENT ON TABLE qc_items IS 'QC 세부 시험 결과 (Detailed QC Items)';
+COMMENT ON COLUMN qc_items.qc_item_id IS '결과일련번호 (PK)';
+COMMENT ON COLUMN qc_items.qc_id IS 'QC마스터ID (FK: quality_controls)';
+COMMENT ON COLUMN qc_items.test_parameter_code IS '시험항목명';
+COMMENT ON COLUMN qc_items.spec_range IS '당시규격범위';
+COMMENT ON COLUMN qc_items.actual_value IS '실제측정치';
+COMMENT ON COLUMN qc_items.result_status_code IS '항목합격여부상태코드';
+COMMENT ON COLUMN qc_items.created_at IS '생성일시';
+
+-- 6. 글로벌 정산 및 환율 관리 (Global Settlements)
+CREATE TABLE IF NOT EXISTS exchange_rates (
+    rate_id SERIAL PRIMARY KEY,
+    from_currency VARCHAR(10) NOT NULL, -- 예: 'USD'
+    to_currency VARCHAR(10) NOT NULL,   -- 예: 'KRW'
+    base_rate DECIMAL(15, 6) NOT NULL,  -- 환율 (1 From = N To)
+    provider VARCHAR(50),               -- 정보 제공처
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS settlements (
+    settlement_id SERIAL PRIMARY KEY,
+    order_id INTEGER REFERENCES orders(order_id) ON DELETE CASCADE,
+    buyer_id INTEGER REFERENCES buyer(buyer_id) ON DELETE SET NULL,
+    total_amount DECIMAL(15, 2) NOT NULL,     -- 총 결제액
+    currency VARCHAR(10) DEFAULT 'USD',
+    tax_amount DECIMAL(15, 2) DEFAULT 0,      -- 세금
+    fee_amount DECIMAL(15, 2) DEFAULT 0,      -- 플랫폼/결제 수수료
+    net_amount DECIMAL(15, 2) NOT NULL,      -- 최종 정산액 (판매자 수익 = 총액 - 세금 - 수수료)
+    settlement_status_code VARCHAR(10) DEFAULT 'Pending', -- Pending, Completed, Canceled
+    paid_at TIMESTAMP WITH TIME ZONE,        -- 실제 정산 완료일
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE exchange_rates IS '글로벌 환율 정보 (Exchange Rates)';
+COMMENT ON COLUMN exchange_rates.rate_id IS '환율ID (PK)';
+COMMENT ON COLUMN exchange_rates.from_currency IS '기준통화(From)';
+COMMENT ON COLUMN exchange_rates.to_currency IS '대상통화(To)';
+COMMENT ON COLUMN exchange_rates.base_rate IS '변환비율(환율)';
+COMMENT ON COLUMN exchange_rates.provider IS '데이터출처';
+COMMENT ON COLUMN exchange_rates.updated_at IS '최종업데이트시각';
+
+COMMENT ON TABLE settlements IS '최종 정산 내역 (Settlement Handling)';
+COMMENT ON COLUMN settlements.settlement_id IS '정산ID (PK)';
+COMMENT ON COLUMN settlements.order_id IS '주문ID (FK: orders)';
+COMMENT ON COLUMN settlements.buyer_id IS '결제사용자ID (FK: buyer)';
+COMMENT ON COLUMN settlements.total_amount IS '고객결제총액';
+COMMENT ON COLUMN settlements.currency IS '통화단위';
+COMMENT ON COLUMN settlements.tax_amount IS '포함세액';
+COMMENT ON COLUMN settlements.fee_amount IS '수수료액';
+COMMENT ON COLUMN settlements.net_amount IS '공급사정산액(Net)';
+COMMENT ON COLUMN settlements.settlement_status_code IS '정산진행상태코드';
+COMMENT ON COLUMN settlements.paid_at IS '실제정산완료일시';
+COMMENT ON COLUMN settlements.created_at IS '생성일시';
+COMMENT ON COLUMN settlements.updated_at IS '수정일시';
+
+-- 4.7 정보 서비스 및 AI 파트너
+COMMENT ON TABLE insight_reports IS '시장 트렌드 인사이트 리포트 (Insight Reports)';
+COMMENT ON COLUMN insight_reports.report_id IS '리포트ID (PK)';
+COMMENT ON COLUMN insight_reports.title IS '리포트제목';
+COMMENT ON COLUMN insight_reports.insight_pillars_code IS '인사이트주요구분코드';
+COMMENT ON COLUMN insight_reports.summary IS '리포트요약';
+COMMENT ON COLUMN insight_reports.content_body IS '리포트본문';
+COMMENT ON COLUMN insight_reports.cover_image_url IS '대표이미지URL';
+COMMENT ON COLUMN insight_reports.view_count IS '조회수';
+COMMENT ON COLUMN insight_reports.published_at IS '게시일시';
+COMMENT ON COLUMN insight_reports.created_at IS '등록일시';
+
+COMMENT ON TABLE trend_keywords IS '트렌드 키워드 및 벡터 (Trend Keywords)';
+COMMENT ON COLUMN trend_keywords.keyword_id IS '키워드ID (PK)';
+COMMENT ON COLUMN trend_keywords.keyword IS '키워드명';
+COMMENT ON COLUMN trend_keywords.trend_type_code IS '트렌드유형코드';
+COMMENT ON COLUMN trend_keywords.trend_score IS '트렌드지수';
+COMMENT ON COLUMN trend_keywords.trend_vector IS '키워드벡터(AI 벡터)';
+COMMENT ON COLUMN trend_keywords.summary IS '키워드요약';
+COMMENT ON COLUMN trend_keywords.related_ingredient_ids IS '관련성분ID목록';
+COMMENT ON COLUMN trend_keywords.related_product_ids IS '관련상품ID목록';
+COMMENT ON COLUMN trend_keywords.created_at IS '수집일시';
+
+COMMENT ON TABLE market_statistics IS '시장 통계 데이터 (Market Statistics)';
+COMMENT ON COLUMN market_statistics.stat_id IS '통계ID (PK)';
+COMMENT ON COLUMN market_statistics.stat_type IS '통계유형';
+COMMENT ON COLUMN market_statistics.target_region IS '대상지역';
+COMMENT ON COLUMN market_statistics.target_category IS '대상카테고리';
+COMMENT ON COLUMN market_statistics.period IS '기준기간';
+COMMENT ON COLUMN market_statistics.data_json IS '수치데이터(JSON)';
+COMMENT ON COLUMN market_statistics.description IS '전문가해설';
+COMMENT ON COLUMN market_statistics.created_at IS '등록일시';
+
+COMMENT ON TABLE ai_chat_sessions IS 'AI 채팅 상담 세션 (AI Chat Sessions)';
+COMMENT ON COLUMN ai_chat_sessions.session_id IS '세션ID (PK)';
+COMMENT ON COLUMN ai_chat_sessions.user_id IS '사용자ID (FK: buyer)';
+COMMENT ON COLUMN ai_chat_sessions.title IS '세션제목';
+COMMENT ON COLUMN ai_chat_sessions.status_code IS '세션상태코드 (Group 18)';
+COMMENT ON COLUMN ai_chat_sessions.created_at IS '생성일시';
+COMMENT ON COLUMN ai_chat_sessions.updated_at IS '수정일시';
+
+COMMENT ON TABLE ai_chat_messages IS 'AI 채팅 상세 메시지 (AI Chat Messages)';
+COMMENT ON COLUMN ai_chat_messages.message_id IS '메시지ID (PK)';
+COMMENT ON COLUMN ai_chat_messages.session_id IS '세션ID (FK: ai_chat_sessions)';
+COMMENT ON COLUMN ai_chat_messages.role IS '화자역할 (User, Assistant)';
+COMMENT ON COLUMN ai_chat_messages.content IS '대화내용';
+COMMENT ON COLUMN ai_chat_messages.metadata IS '참조데이터(JSON)';
+COMMENT ON COLUMN ai_chat_messages.created_at IS '발송일시';
+
+COMMENT ON TABLE ai_consulting_briefs IS 'AI 생성 컨설팅 브리프 (AI Consulting Briefs)';
+COMMENT ON COLUMN ai_consulting_briefs.brief_id IS '브리프ID (PK)';
+COMMENT ON COLUMN ai_consulting_briefs.session_id IS '세션ID (FK: ai_chat_sessions)';
+COMMENT ON COLUMN ai_consulting_briefs.proposed_strategy IS '제안전략본문';
+COMMENT ON COLUMN ai_consulting_briefs.recommended_items IS '추천상품목록(JSON)';
+COMMENT ON COLUMN ai_consulting_briefs.created_at IS '생성일시';
+
+-- 2.5 공식 샘플 및 품평 관리 (Sample Development & Review)
+
+-- 프로젝트 샘플 마스터 (Project Sample)
+CREATE TABLE IF NOT EXISTS project_sample (
+    project_sample_id SERIAL PRIMARY KEY,
+    project_id INTEGER REFERENCES projects(project_id) ON DELETE CASCADE,
+    version_number INTEGER NOT NULL,
+    sample_name VARCHAR(255),
+    sample_status_code VARCHAR(20) DEFAULT '1900000001', -- 준비중 (Group 19)
+    tracking_number VARCHAR(100),
+    manufacturer_comments TEXT,
+    sent_at TIMESTAMP WITH TIME ZONE,
+    received_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 샘플 품평 결과 (Sample Review)
+CREATE TABLE IF NOT EXISTS sample_review (
+    sample_review_id SERIAL PRIMARY KEY,
+    project_sample_id INTEGER REFERENCES project_sample(project_sample_id) ON DELETE CASCADE,
+    buyer_id INTEGER REFERENCES buyer(buyer_id) ON DELETE SET NULL,
+    overall_score NUMERIC(3, 1) CHECK (overall_score >= 1.0 AND overall_score <= 5.0),
+    scent_score INTEGER CHECK (scent_score >= 1 AND scent_score <= 5),
+    texture_score INTEGER CHECK (texture_score >= 1 AND texture_score <= 5),
+    absorption_score INTEGER CHECK (absorption_score >= 1 AND absorption_score <= 5),
+    moisture_score INTEGER CHECK (moisture_score >= 1 AND moisture_score <= 5),
+    detailed_feedback TEXT,
+    improvement_requests TEXT,
+    decision VARCHAR(50), -- Approved, Modify, Rejected
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE project_sample IS '프로젝트별 샘플 제작 및 발송 이력 관리';
+COMMENT ON COLUMN project_sample.project_sample_id IS '샘플ID';
+COMMENT ON COLUMN project_sample.project_id IS '연관 프로젝트ID';
+COMMENT ON COLUMN project_sample.version_number IS '샘플 차수 (V1, V2 등 차수 번호)';
+COMMENT ON COLUMN project_sample.sample_name IS '샘플 명칭';
+COMMENT ON COLUMN project_sample.sample_status_code IS '샘플 진행 상태 코드 (Group 19)';
+COMMENT ON COLUMN project_sample.tracking_number IS '배송 송장 번호 (운송장 번호)';
+COMMENT ON COLUMN project_sample.manufacturer_comments IS '제조사 코멘트 (샘플 특징 및 처방 설명)';
+COMMENT ON COLUMN project_sample.sent_at IS '샘플 발송일시';
+COMMENT ON COLUMN project_sample.received_at IS '바이어 수령일시';
+COMMENT ON COLUMN project_sample.created_at IS '등록일시';
+COMMENT ON COLUMN project_sample.updated_at IS '수정일시';
+
+COMMENT ON TABLE sample_review IS '샘플에 대한 바이어의 상세 감각 품평 결과';
+COMMENT ON COLUMN sample_review.sample_review_id IS '품평ID';
+COMMENT ON COLUMN sample_review.project_sample_id IS '대상 샘플ID';
+COMMENT ON COLUMN sample_review.buyer_id IS '작성 바이어ID';
+COMMENT ON COLUMN sample_review.overall_score IS '종합 만족도 점수 (1.0~5.0)';
+COMMENT ON COLUMN sample_review.scent_score IS '향 만족도 점수 (1~5)';
+COMMENT ON COLUMN sample_review.texture_score IS '제형 만족도 점수 (1~5)';
+COMMENT ON COLUMN sample_review.absorption_score IS '흡수력 만족도 점수 (1~5)';
+COMMENT ON COLUMN sample_review.moisture_score IS '보습력 만족도 점수 (1~5)';
+COMMENT ON COLUMN sample_review.detailed_feedback IS '상세 품평 의견 (주관식 피드백)';
+COMMENT ON COLUMN sample_review.improvement_requests IS '보안 요청 사항 (다음 차수 반영 요청)';
+COMMENT ON COLUMN sample_review.decision IS '최종 결정 (Approved, Modify, Rejected)';
+COMMENT ON COLUMN sample_review.created_at IS '등록일시';
+COMMENT ON COLUMN sample_review.updated_at IS '수정일시';
+]
+(Background on this error at: https://sqlalche.me/e/20/f405)
